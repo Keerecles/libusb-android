@@ -6,10 +6,18 @@
 #include <gst/gst.h>
 #include <gst/interfaces/xoverlay.h>
 #include <gst/video/video.h>
+#include <gst/app/gstappsrc.h>
 #include <pthread.h>
+#include <gst/app/gstappsrc.h>
+
 
 GST_DEBUG_CATEGORY_STATIC (debug_category);
 #define GST_CAT_DEFAULT debug_category
+
+/*Macros for appsrc    */
+#define CHUNK_SIZE 1024   /* Amount of bytes we are sending in each buffer */
+#define SAMPLE_RATE 44100 /* Samples per second we are sending */
+ 
 
 /*
  * These macros provide a way to store the native pointer to CustomData, which might be 32 or 64 bits, into
@@ -30,7 +38,11 @@ typedef struct _CustomData {
   GMainContext *context;  /* GLib context used to run the main loop */
   GMainLoop *main_loop;   /* GLib main loop */
   gboolean initialized;   /* To avoid informing the UI multiple times about the initialization */
+  GstElement *app_src;    /* The appsrc element which receives video data stream from usb buffer--Kee*/
+  GstElement *h264_dec;   /* The element to decode the encoded video data stream*/
+  GstElement *video_queue;
   GstElement *video_sink; /* The video sink element which receives XOverlay commands */
+  guint sourceid;
   ANativeWindow *native_window; /* The Android native window where video will be rendered */
 } CustomData;
 
@@ -141,6 +153,78 @@ static void check_initialization_complete (CustomData *data) {
   }
 }
 
+
+/***************************************************************
+  Function for appsrc to feed data
+  **************************************************************/
+
+static gboolean push_data (CustomData *data) {
+  GstBuffer *buffer;
+  GstFlowReturn ret;
+  int i;
+  GstMapInfo map;
+  gint framesize = CHUNK_SIZE ; /* Because each sample is 16 bits */
+
+
+  /* Create a new empty buffer */
+  buffer = gst_buffer_new_and_alloc (CHUNK_SIZE);
+  
+  /* Set its timestamp and duration */
+  
+  //GST_BUFFER_DURATION (buffer) = gst_util_uint64_scale (CHUNK_SIZE, GST_SECOND, SAMPLE_RATE);
+  
+  /* Generate some psychodelic waveforms */
+  //gst_buffer_map (buffer, &map, GST_MAP_WRITE);
+  
+  /***************************
+        
+        usb data feed
+
+  ***************************/
+
+
+  gst_buffer_unmap (buffer, &map);
+  
+  /* Push the buffer into the appsrc */
+  g_signal_emit_by_name (data->app_src, "push-buffer", buffer, &ret);
+  
+  /* Free the buffer now that we are done with it */
+  gst_buffer_unref (buffer);
+  
+  if (ret != GST_FLOW_OK) {
+    /* We got some error, stop sending data */
+    GST_DEBUG ("push_data: Error occured, stop sending data/n");
+    return FALSE;
+  }
+  
+  return TRUE;
+}
+  
+/* This signal callback triggers when appsrc needs data. Here, we add an idle handler
+ * to the mainloop to start pushing data into the appsrc */
+static void start_feed (GstElement *source, guint size, CustomData *data) {
+  if (data->sourceid == 0) {
+    GST_DEBUG ("Start feeding\n");
+    data->sourceid = g_idle_add ((GSourceFunc) push_data, data);
+  }
+}
+  
+/* This callback triggers when appsrc has enough data and we can stop sending.
+ * We remove the idle handler from the mainloop */
+static void stop_feed (GstElement *source, CustomData *data) {
+  if (data->sourceid != 0) {
+    GST_DEBUG ("Stop feeding\n");
+    g_source_remove (data->sourceid);
+    data->sourceid = 0;
+  }
+}
+
+
+/***************************************************************
+ **************************************************************/
+
+
+
 /* Main method for the native code. This is executed on its own thread. */
 static void *app_function (void *userdata) {
   JavaVMAttachArgs args;
@@ -148,7 +232,8 @@ static void *app_function (void *userdata) {
   CustomData *data = (CustomData *)userdata;
   GSource *bus_source;
   GError *error = NULL;
-
+  GstAudioInfo info;
+  GstCaps *video_caps;
   GST_DEBUG ("Creating pipeline in CustomData at %p", data);
 
   /* Create our own GLib Main Context and make it the default one */
@@ -156,17 +241,38 @@ static void *app_function (void *userdata) {
   g_main_context_push_thread_default(data->context);
 
   /* Build pipeline */
+  data->app_src = gst_element_factory_make ("appsrc", "app_src");
+  data->video_queue = gst_element_factory_make ("queue", "video_queue");
+  data->h264_dec = gst_element_factory_make ("ffdec_h264", "h264_dec");
+  data->video_sink = gst_element_factory_make ("autovideosink", "video_sink");
   
-  /* H264 */
-  //data->pipeline = gst_parse_launch("udpsrc port=5000 ! application/x-rtp, clock-rate=90000,payload=96 ! rtph264depay queue-delay=0 ! ffdec_h264 ! autovideosink sync=false", &error);
+  data->pipeline = gst_pipeline_new ("VehicleTravlingDataRecoderTest-pipeline");
 
-  /* VP8 */
-  //data->pipeline = gst_parse_launch("udpsrc port=5000 ! application/x-rtp, clock-rate=90000,payload=96 ! rtpvp8depay queue-delay=0 ! ffdec_vp8 ! autovideosink sync=false", &error);
+  if (!data->pipeline){GST_ERROR ("Fail to create element pipeline");}
+  if (!data->app_src){GST_ERROR ("Fail to create element pipeline");}
+  if (!data->video_queue){GST_ERROR ("Fail to create element video_queue");}
+  if (!data->h264_dec){GST_ERROR ("Fail to create element h264_dec");}
+  if (!data->video_sink){GST_ERROR ("Fail to create element video_sink");}
 
-  /* audio */
-  //data->pipeline = gst_parse_launch("udpsrc port=5000 ! openslessink ", &error);
-  data->pipeline = gst_parse_launch("filesrc location=/file/WhatAreWords.mp3 ! id3demux ! queue ! mpegaudioparse  ! adpcmdec ! openslessink ", &error);
+  /* Configure appsrc */
+  gst_video_info_set_format (&info, GST_VIDEO_FORMAT_UNKNOWN, 1280,720);
+  video_caps = gst_video_info_to_caps (&info);
+  g_object_set (data->app_src, "caps", video_caps, "format", GST_FORMAT_TIME, NULL);
+  g_signal_connect (data->app_src, "need-data", G_CALLBACK (start_feed), &data);
+  g_signal_connect (data->app_src, "enough-data", G_CALLBACK (stop_feed), &data);
+  
 
+
+  /* Link all elements that can be automatically linked because they have "Always" pads */
+  gst_bin_add_many (GST_BIN (data->pipeline), data->app_src, data->video_queue, data->h264_dec, data->video_sink,NULL);
+  
+  if ( gst_element_link_many (data->app_src,data->video_queue, data->h264_dec, data->video_sink, NULL) != TRUE){
+       GST_ERROR ("Elements could not be linked");
+       gst_object_unref (data->pipeline);
+  }
+
+
+  gst_element_set_state (data->pipeline, GST_STATE_PLAYING);
 
   if (error) {
     gchar *message = g_strdup_printf("Unable to build pipeline: %s", error->message);
