@@ -16,8 +16,8 @@ GST_DEBUG_CATEGORY_STATIC (debug_category);
 #define GST_CAT_DEFAULT debug_category
 
 /*Macros for appsrc    */
-#define CHUNK_SIZE 1024   /* Amount of bytes we are sending in each buffer */
-#define SAMPLE_RATE 44100 /* Samples per second we are sending */
+#define CHUNK_SIZE 150000   /* Amount of bytes we are sending in each buffer */
+
  
 
 /*
