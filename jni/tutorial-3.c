@@ -9,6 +9,7 @@
 #include <gst/app/gstappsrc.h>
 #include <pthread.h>
 #include <gst/app/gstappsrc.h>
+#include "libusb.h"
 
 
 GST_DEBUG_CATEGORY_STATIC (debug_category);
@@ -41,6 +42,7 @@ typedef struct _CustomData {
   GstElement *app_src;    /* The appsrc element which receives video data stream from usb buffer--Kee*/
   GstElement *h264_dec;   /* The element to decode the encoded video data stream*/
   GstElement *video_queue;
+  GstElement *camere_sink;
   GstElement *video_sink; /* The video sink element which receives XOverlay commands */
   guint sourceid;
   ANativeWindow *native_window; /* The Android native window where video will be rendered */
@@ -244,7 +246,7 @@ static void *app_function (void *userdata) {
   data->app_src = gst_element_factory_make ("appsrc", "app_src");
   data->video_queue = gst_element_factory_make ("queue", "video_queue");
   data->h264_dec = gst_element_factory_make ("ffdec_h264", "h264_dec");
-  data->video_sink = gst_element_factory_make ("autovideosink", "video_sink");
+  data->camera_sink =gst_element_factory_make("autovideosink","camera_sink");
   
   data->pipeline = gst_pipeline_new ("VehicleTravlingDataRecoderTest-pipeline");
 
@@ -252,7 +254,7 @@ static void *app_function (void *userdata) {
   if (!data->app_src){GST_ERROR ("Fail to create element pipeline");}
   if (!data->video_queue){GST_ERROR ("Fail to create element video_queue");}
   if (!data->h264_dec){GST_ERROR ("Fail to create element h264_dec");}
-  if (!data->video_sink){GST_ERROR ("Fail to create element video_sink");}
+  if (!data->camera_sink){GST_ERROR ("Fail to create element camera_sink");}
 
   /* Configure appsrc */
   gst_video_info_set_format (&info, GST_VIDEO_FORMAT_UNKNOWN, 1280,720);
@@ -264,9 +266,9 @@ static void *app_function (void *userdata) {
 
 
   /* Link all elements that can be automatically linked because they have "Always" pads */
-  gst_bin_add_many (GST_BIN (data->pipeline), data->app_src, data->video_queue, data->h264_dec, data->video_sink,NULL);
+  gst_bin_add_many (GST_BIN (data->pipeline), data->app_src, data->video_queue, data->h264_dec, data->camera_sink,NULL);
   
-  if ( gst_element_link_many (data->app_src,data->video_queue, data->h264_dec, data->video_sink, NULL) != TRUE){
+  if ( gst_element_link_many (data->app_src,data->video_queue, data->h264_dec, data->camera_sink, NULL) != TRUE){
        GST_ERROR ("Elements could not be linked");
        gst_object_unref (data->pipeline);
   }
