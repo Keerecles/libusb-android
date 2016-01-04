@@ -8,17 +8,10 @@
 #include <sys/wait.h>
 #include <pthread.h>
 #include <errno.h>
-//#include <dlt/dlt.h>
-#include <libusb-1.0/libusb.h>
-#include "cameradae.h" 
-#include "cameradae.h"
 #include "libusb-api.h"
 
 
-extern FILE *fp;
-struct Device* cameracore_usb_device;
-uint8_t in_endpoint;
-uint8_t out_endpoint;
+
 char in_buffer[1000];
 char out_buffer[1000];
 libusb_hotplug_callback_handle HotplugArrivedCallbackHandle;
@@ -29,10 +22,16 @@ int CAMERACORE_libusb_init(struct Device* device){
   
   int libusb_ret = libusb_init(&(device->libusb_context_cameracore));
 
+  /*init the endpoint*/
+  device->in_endpoint = 0 ;
+  device->out_endpoint = 0;
+
   if (LIBUSB_SUCCESS != libusb_ret) {
     CAMERACORE_log(fp, "[ AMERACORE_log]:CAMERACORE_libusb_init [libusb_init failed: ]");
     return -1;
   }
+
+  libusb_set_debug(device->libusb_context_cameracore,3);
 
   if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG)) {
     CAMERACORE_log(fp, "[CAMERACORE_log]:CAMERACORE_libusb_init [LIBUSB_CAP_HAS_HOTPLUG not supported]");
@@ -191,7 +190,7 @@ int OnDeviceListUpdated(){
 int DeviceConnect(struct Device* device){
 
 
-  if (!FindEndpoints()) {
+  if (!FindEndpoints(device)) {
     CAMERACORE_log(fp, "[CAMERACORE_log]:DeviceConnect [EndPoints was not found]");
     return -1;
   }
@@ -205,13 +204,13 @@ int DeviceConnect(struct Device* device){
 }
 
 
-int FindEndpoints(){
+int FindEndpoints(struct Device* device){
 
+  
   struct libusb_config_descriptor* config;
-  const int libusb_ret = libusb_get_active_config_descriptor(libusb_device_, &config);
+  const int libusb_ret = libusb_get_active_config_descriptor(device->device_libusb, &config);
   if (LIBUSB_SUCCESS != libusb_ret) {
     CAMERACORE_log(fp, "[CAMERACORE_log]:libusb_get_active_config_descriptor failed: ");
-    CAMERACORE_log(fp, "[CAMERACORE_log]:exit with -1. Condition: LIBUSB_SUCCESS != libusb_ret");
     return -1;
   }
 
@@ -219,21 +218,20 @@ int FindEndpoints(){
   int find_out_endpoint = 1;
 
   for (int i = 0; i < (config->bNumInterfaces); ++i) {
-    const libusb_interface& interface = config->interface[i];
+    const struct libusb_interface& interface = config->interface[i];
     for (int i = 0; i < interface.num_altsetting; ++i) {
-      const libusb_interface_descriptor& iface_desc = interface.altsetting[i];
+      const struct libusb_interface_descriptor& iface_desc = interface.altsetting[i];
       for (int i = 0; i < iface_desc.bNumEndpoints; ++i) {
-        const libusb_endpoint_descriptor& endpoint_desc =
-          iface_desc.endpoint[i];
+        const struct libusb_endpoint_descriptor& endpoint_desc = iface_desc.endpoint[i];
 
         const uint8_t endpoint_dir =
           endpoint_desc.bEndpointAddress & LIBUSB_ENDPOINT_DIR_MASK;
         if (find_in_endpoint && endpoint_dir == LIBUSB_ENDPOINT_IN) {
-          in_endpoint = endpoint_desc.bEndpointAddress;
+          device->in_endpoint = endpoint_desc.bEndpointAddress;
           in_endpoint_max_packet_size = endpoint_desc.wMaxPacketSize;
           find_in_endpoint = -1;
         } else if (find_out_endpoint && endpoint_dir == LIBUSB_ENDPOINT_OUT) {
-          out_endpoint = endpoint_desc.bEndpointAddress;
+          device->out_endpoint = endpoint_desc.bEndpointAddress;
           out_endpoint_max_packet_size = endpoint_desc.wMaxPacketSize;
           find_out_endpoint = -1;
         }
