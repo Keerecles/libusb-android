@@ -15,9 +15,7 @@
 #include "libusb-api.h"
 
 
-extern FILE *fp; 
-libusb_context* libusb_context_cameracore;
-libusb_device_handle* device_handle_libusb;
+extern FILE *fp;
 struct Device* cameracore_usb_device;
 uint8_t in_endpoint;
 uint8_t out_endpoint;
@@ -29,7 +27,7 @@ libusb_hotplug_callback_handle HotplugLeftCallbackHandle;
 
 int CAMERACORE_libusb_init(struct Device* device){
   
-  int libusb_ret = libusb_init(&libusb_context_cameracore);
+  int libusb_ret = libusb_init(&(device->libusb_context_cameracore));
 
   if (LIBUSB_SUCCESS != libusb_ret) {
     CAMERACORE_log(fp, "[ AMERACORE_log]:CAMERACORE_libusb_init [libusb_init failed: ]");
@@ -42,7 +40,7 @@ int CAMERACORE_libusb_init(struct Device* device){
   }
 
   libusb_ret = libusb_hotplug_register_callback(
-                 libusb_context_cameracore, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
+                 device->libusb_context_cameracore, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED,
                  LIBUSB_HOTPLUG_ENUMERATE, LIBUSB_HOTPLUG_MATCH_ANY,
                  LIBUSB_HOTPLUG_MATCH_ANY, LIBUSB_HOTPLUG_MATCH_ANY, HotplugDeviceArrivedCallback, device,
                  &HotplugArrivedCallbackHandle);
@@ -55,7 +53,7 @@ int CAMERACORE_libusb_init(struct Device* device){
   }
 
   libusb_ret = libusb_hotplug_register_callback(
-                 libusb_context_cameracore, LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT,
+                 device->libusb_context_cameracore, LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT,
                  static_cast<libusb_hotplug_flag>(0), LIBUSB_HOTPLUG_MATCH_ANY,
                  LIBUSB_HOTPLUG_MATCH_ANY, LIBUSB_HOTPLUG_MATCH_ANY, HotplugDeviceLifedCallback, device,
                  &HotplugLeftCallbackHandle);
@@ -69,33 +67,40 @@ int CAMERACORE_libusb_init(struct Device* device){
 }
 
 
-int HotplugDeviceArrivedCallback( libusb_context* context, 
-                                  libusb_device* device_libusb, 
-                                  libusb_hotplug_event event, 
+int HotplugDeviceArrivedCallback( struct libusb_context* context, 
+                                  struct libusb_device* device_libusb, 
+                                  struct libusb_hotplug_event event, 
                                   void* data) {
   CAMERACORE_log(fp, "[CAMERACORE_log]:HotplugDeviceArrivedCallback [libusb_hotplug_register_callback failed: ");
  
-  //获取热插拔传递的device地址
-  struct Device* device = static_cast<struct Device*>(data);
-  DeviceArrived(device);
-  return 0;
+  
+  struct Device* device =<struct Device*>(data);
+
+  // discover devices  获取热插拔传递的device
+  libusb_device **list;
+  int cnt = libusb_get_device_list(device->libusb_context_cameracore, &list);
+  int i = 0;
+  int err = 0;
+  if (cnt < 0){
+    CAMERACORE_log(fp, "[CAMERACORE_log]:HotplugDeviceArrivedCallback [Getting device list failed] ");
   }
-
-int HotplugDeviceLifedCallback(   libusb_context* context, 
-                                  libusb_device* device_libusb, 
-                                  libusb_hotplug_event event, void* data){
-
-  CAMERACORE_log(fp, "[CAMERACORE_log]:HotplugDeviceLifedCallback [libusb_hotplug_register_callback failed: ")
-  /**********
-  数据 参数转换    
-  *************/
-  struct Device* device = static_cast<struct Device*>(data);
-  DeviceLifed(device);
-
+  for (i = 0; i < cnt; i++) {
+      libusb_device *dev = list[i];
+      if (is_interesting(dev)) {
+          device->device_libusb =dev;
+          DeviceArrived(device);
+          break;
+      }
+  }
+  libusb_free_device_list(list, 1);
+  return 0;
 }
 
 
-int DeviceArrived(  struct Device* device){
+int is_interesting(struct Device* device){
+
+}
+int DeviceArrived( struct Device* device){
   
   
   int libusb_ret = libusb_get_device_descriptor(device->device_libusb, device->device_descriptor);
@@ -138,11 +143,8 @@ int DeviceArrived(  struct Device* device){
     CAMERACORE_log(fp, "[CAMERACORE_log]:DeviceArrived [libusb_claim_interface failed: ");
     // CAMERACORE_log(fp,libusb_error_name(libusb_ret));
     // CAMERACORE_log(fp,"]");
-    CloseDeviceHandle(device->device_handle_libusb);
     return;
   }
-
-
   /***********
         push the device to the device list
   ****************/
@@ -155,67 +157,6 @@ int DeviceArrived(  struct Device* device){
 int OnDeviceArrived(struct Device* device){
 
     DeviceConnect(device);
-}
-
-
-int DeviceLifed(  libusb_device* 
-                  device_libusb,
-                  libusb_device_handle* 
-                  device_handle_libusb){
-
-    CAMERACORE_log(fp, "[CAMERACORE_log]:DeviceLifed [Device has lifed]");
-
-
-    //libusb_handle_events_completed(libusb_context_cameracore, &completed);
-
-    libusb_hotplug_deregister_callback(libusb_context_cameracore, HotplugArrivedCallbackHandle);
-    libusb_hotplug_deregister_callback(libusb_context_cameracore, HotplugLeftCallbackHandle);
-
-    libusb_close(libusb_context_cameracore);
-
-}
-
-
-int TurnIntoAccessoryMode(struct Device* device){
-  //留作其他设备接口
-}
-
-
-int IsGoogleAccessory(const struct Device* device) {
-  return (kAoaVid == device->vendor_id) &&
-    ((kAoaPid1 == device->product_id) || (kAoaPid2 == device->product_id));
-}
-
-
-int IsAppleDevice(const struct Device* device) {
-  return (kAppleVid == device->vendor_id) &&
-    ((kApplePid1 == device->product_id) ||
-     (kApplePid2 == device->product_id) ||
-     (kApplePid3 == device->product_id) ||
-     (kApplePid4 == device->product_id) ||
-     (kApplePid5 == device->product_id) ||
-     (kApplePid6 == device->product_id) ||
-     (kApplePid7 == device->product_id));
-}
-
-
-int GoogleDeviceHandle(struct Device* device){
-  /*
-    针对google设备的接口
-  */
-  DeviceHandle(device);
-
-
-
-}
-int AppleDeviceHandle(struct Device* device){
-
-  /*
-    针对apple设备的接口
-  */
-
-  DeviceHandle(device);
-
 }
 
 
@@ -328,17 +269,18 @@ int PostOutTransfer(libusb_device_handle* device_handle_libusb) {
   return 1;
 }
 
-int PostInTransfer(libusb_device_handle* device_handle_libusb){
+int PostInTransfer(struct Device * device){
 
-  libusb_transfer* in_transfer = libusb_alloc_transfer(0);
+  libusb_transfer* in_transfer = libusb_alloc_transfer(16); //16 的选择 参考libusb的sam3u_benchmark.c 例子
   if (NULL == in_transfer) {
     CAMERACORE_log(fp, "[CAMERACORE_log]:DeviceConnect [libusb_alloc_transfer failed]");
     return -1;
   }
 
-  libusb_fill_bulk_transfer(in_transfer, device_handle_libusb, in_endpoint,
-                            in_buffer, in_endpoint_max_packet_size,
-                            InTransferCallback, NULL, 0);
+    libusb_fill_iso_transfer(in_transfer,device->device_handle_libusb,in_endpoint,in_buffer,
+        sizeof(in_transfer), 16,InTransferCallback, NULL, 0);
+    libusb_set_iso_packet_lengths(in_transfer, sizeof(in_buffer)/16);
+    
   const int libusb_ret = libusb_submit_transfer(in_transfer);
   if (LIBUSB_SUCCESS != libusb_ret) {
     CAMERACORE_log(fp, "[CAMERACORE_log]:PostInTransfer [libusb_submit_transfer failed: ");
@@ -351,41 +293,21 @@ int PostInTransfer(libusb_device_handle* device_handle_libusb){
 }
 
 void InTransferCallback(struct libusb_transfer* transfer){
-  
-  /*
-  InTransferCallback/OutTransferCallback 主要完成 在数据传输成功后，
-  向上层发出 “传输成功”的event，并要求应答
-  现在无需移植实现
-  参考SDL transport_adapter_listener_impl.cc L175
-  */
 
   if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
 
   /*
-      向上层发出 “传输成功”的event，并要求应答
+      向上层发出 “传输成功”的event，并要求应答(当前in_buffer 已经有数据 ，可以使用appsrc 读取)
   */
   } 
   else {
     CAMERACORE_log(fp, "[CAMERACORE_log]:InTransferCallback USB incoming transfer failed: ");
-    // CAMERACORE_log(fp,libusb_error_name(transfer->status));
-    // CAMERACORE_log(fp,"]");
-
-    /*
-      向上层发出 “传输失败”的event，并要求应答
-  */
   }
 
 }
 
 
 void OutTransferCallback(struct libusb_transfer* transfer){
-
-  /*
-  InTransferCallback/OutTransferCallback 主要完成 在数据传输成功后，
-  向上层发出 “传输成功”的event，并要求应答
-  现在无需移植实现
-  参考SDL transport_adapter_listener_impl.cc L175
-  */
 
   if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
 
@@ -396,22 +318,10 @@ void OutTransferCallback(struct libusb_transfer* transfer){
   else {
    
     CAMERACORE_log(fp, "[CAMERACORE_log]:OutTransferCallback USB incoming transfer failed: ");
-    // CAMERACORE_log(fp,libusb_error_name(transfer->status));
-    // CAMERACORE_log(fp,"]");
     /*
       向上层发出 “传输失败”的event，并要求应答
   */
-  }
-  // if (disconnecting_) {
-  //   waiting_in_transfer_cancel_ = -1;
-  // } else {
-  //   if (!PostInTransfer()) {
-  //     CAMERACORE_log(fp, "USB incoming transfer failed with "
-  //                   << "LIBUSB_TRANSFER_NO_DEVICE. Abort connection.");
-  //     AbortConnection();
-  //   }
-  // }
- 
+  } 
 }
 
 
@@ -420,7 +330,7 @@ int CAMERACORE_libusb_ReceiveData(struct Device* device)
   /*
   设置buffer属性
   */
-
+    
 
   /*
   视频传输优化逻辑
@@ -429,15 +339,6 @@ int CAMERACORE_libusb_ReceiveData(struct Device* device)
   PostInTransfer(device->device_handle_libusb);
 }
 
-
-void CloseDeviceHandle(libusb_device_handle* device_handle_libusb){
-
-
-}
-
-void AbortConnection(){
-
-}
 
 void OnDeviceConnect(){
   /*

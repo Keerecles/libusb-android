@@ -163,29 +163,24 @@ static void check_initialization_complete (CustomData *data) {
 static gboolean push_data (CustomData *data) {
   GstBuffer *buffer;
   GstFlowReturn ret;
-  int i;
   GstMapInfo map;
-  gint framesize = CHUNK_SIZE ; /* Because each sample is 16 bits */
+  int framesize = CHUNK_SIZE ; /* Because each sample is 16 bits */
 
 
+  /*************************** 
+        usb data feed
+  ***************************/
   /* Create a new empty buffer */
   buffer = gst_buffer_new_and_alloc (CHUNK_SIZE);
-  
-  /* Set its timestamp and duration */
-  
-  //GST_BUFFER_DURATION (buffer) = gst_util_uint64_scale (CHUNK_SIZE, GST_SECOND, SAMPLE_RATE);
-  
-  /* Generate some psychodelic waveforms */
-  //gst_buffer_map (buffer, &map, GST_MAP_WRITE);
-  
-  /***************************
-        
-        usb data feed
-
-  ***************************/
+  GstMapInfo info;
+  gst_buffer_map(buffer, &info, GST_MAP_WRITE);
+  unsigned char* buf = info.data;
 
 
-  gst_buffer_unmap (buffer, &map);
+  memmove(buf, in_libusb_buffer, size);
+
+  
+  gst_buffer_unmap(buffer, &info);
   
   /* Push the buffer into the appsrc */
   g_signal_emit_by_name (data->app_src, "push-buffer", buffer, &ret);
@@ -236,11 +231,19 @@ static void *app_function (void *userdata) {
   GError *error = NULL;
   GstAudioInfo info;
   GstCaps *video_caps;
+  struct Device* device;
   GST_DEBUG ("Creating pipeline in CustomData at %p", data);
 
   /* Create our own GLib Main Context and make it the default one */
   data->context = g_main_context_new ();
   g_main_context_push_thread_default(data->context);
+
+
+
+  /* initalise the libusb*/
+  CAMERACORE_libusb_init(device);
+
+
 
   /* Build pipeline */
   data->app_src = gst_element_factory_make ("appsrc", "app_src");
