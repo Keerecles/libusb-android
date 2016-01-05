@@ -44,6 +44,7 @@ typedef struct _CustomData {
   GstElement *video_queue;
   GstElement *camere_sink;
   GstElement *video_sink; /* The video sink element which receives XOverlay commands */
+  struct Device* device;
   guint sourceid;
   ANativeWindow *native_window; /* The Android native window where video will be rendered */
 } CustomData;
@@ -170,8 +171,10 @@ static gboolean push_data (CustomData *data) {
   /*************************** 
         usb data feed
   ***************************/
+
+  CAMERACORE_libusb_ReceiveData(data->device);
   /* Create a new empty buffer */
-  buffer = gst_buffer_new_and_alloc (CHUNK_SIZE);
+  buffer = gst_buffer_new_and_alloc (NULL,CHUNK_SIZE,NULL);
   GstMapInfo info;
   gst_buffer_map(buffer, &info, GST_MAP_WRITE);
   unsigned char* buf = info.data;
@@ -231,7 +234,7 @@ static void *app_function (void *userdata) {
   GError *error = NULL;
   GstAudioInfo info;
   GstCaps *video_caps;
-  struct Device* device;
+  struct Device usbdevice;
   GST_DEBUG ("Creating pipeline in CustomData at %p", data);
 
   /* Create our own GLib Main Context and make it the default one */
@@ -239,9 +242,9 @@ static void *app_function (void *userdata) {
   g_main_context_push_thread_default(data->context);
 
 
-
+  data->device = &usbdevice;
   /* initalise the libusb*/
-  CAMERACORE_libusb_init(device);
+  CAMERACORE_libusb_init(&usbdevice);
 
 
 

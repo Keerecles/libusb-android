@@ -275,7 +275,7 @@ int PostInTransfer(struct Device * device){
     return -1;
   }
 
-    libusb_fill_iso_transfer(in_transfer,device->device_handle_libusb,in_endpoint,in_buffer,
+    libusb_fill_iso_transfer(in_transfer,device->device_handle_libusb,device.in_endpoint,in_buffer,
         sizeof(in_transfer), 16,InTransferCallback, NULL, 0);
     libusb_set_iso_packet_lengths(in_transfer, sizeof(in_buffer)/16);
     
