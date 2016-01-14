@@ -79,7 +79,7 @@ public class USBTransport {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            logD("USBReceiver Action: " + action);
+            Log.d("Gstreamer","USBReceiver Action: " + action);
 
             UsbAccessory accessory =
                     intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY);
@@ -261,13 +261,13 @@ public class USBTransport {
                     setState(State.LISTENING);
                 }
 
-                logD("Registering receiver");
+                Log.d("Gstreamer","Registering receiver");
                 try {
                     IntentFilter filter = new IntentFilter();
                     filter.addAction(ACTION_USB_ACCESSORY_ATTACHED);
                     filter.addAction(UsbManager.ACTION_USB_ACCESSORY_DETACHED);
                     filter.addAction(ACTION_USB_PERMISSION);
-                    getContext().registerReceiver(mUSBReceiver, filter);
+//                  getContext().registerReceiver(mUSBReceiver, filter);
 
                     initializeAccessory();
                 } catch (Exception e) {
@@ -333,7 +333,7 @@ public class USBTransport {
             // don't join() now
             mReaderThread = null;
         } else {
-            logD("USB reader is null");
+            Log.d("Gstreamer","USB reader is null");
         }
     }
 
@@ -389,9 +389,9 @@ public class USBTransport {
                     }
                 }
 
-                logD("Unregistering receiver");
+                Log.d("Gstreamer","Unregistering receiver");
                 try {
-                    getContext().unregisterReceiver(mUSBReceiver);
+//                    getContext().unregisterReceiver(mUSBReceiver);
                 } catch (IllegalArgumentException e) {
                     Log.d("Gstreamer","Receiver was already unregistered", e);
                 }
@@ -438,7 +438,7 @@ public class USBTransport {
         UsbManager usbManager = getUsbManager();
         UsbAccessory[] accessories = usbManager.getAccessoryList();
         if (accessories != null) {
-            logD("Found total " + accessories.length + " accessories");
+            Log.d("Gstreamer","Found total " + accessories.length + " accessories");
             for (UsbAccessory accessory : accessories) {
                 if (isAccessorySupported(accessory)) {
                     connectToAccessory(accessory);
@@ -612,13 +612,13 @@ public class USBTransport {
          */
         @Override
         public void run() {
-            logD("USB reader started!");
+            Log.d("Gstreamer","USB reader started!");
 
             if (connect()) {
                 readFromTransport();
             }
 
-            logD("USB reader finished!");
+            Log.d("Gstreamer","USB reader finished!");
         }
 
         /**
@@ -667,7 +667,12 @@ public class USBTransport {
 
                     synchronized (USBTransport.this) {
                         setState(State.CONNECTED);
-                        handleTransportConnected();
+                        
+                        /*
+                        向上层通知 设备断开链接
+                        */
+
+                        // handleTransportConnected();
                     }
                     break;
 
@@ -712,10 +717,10 @@ public class USBTransport {
                     return;
                 }
 
-                logD("Read " + bytesRead + " bytes");
-                SdlTrace.logTransportEvent(TAG + ": read bytes", null,
-                        InterfaceActivityDirection.Receive, buffer, bytesRead,
-                        SDL_LIB_TRACE_KEY);
+                Log.d("Gstreamer","Read " + bytesRead + " bytes");
+//                SdlTrace.logTransportEvent(TAG + ": read bytes", null,
+//                        InterfaceActivityDirection.Receive, buffer, bytesRead,
+//                        SDL_LIB_TRACE_KEY);
 
                 if (isInterrupted()) {
                     Log.d("Gstreamer","Read some data, but thread is interrupted");
@@ -724,38 +729,27 @@ public class USBTransport {
 
                 if (bytesRead > 0) {
                     synchronized (USBTransport.this) {
-                        handleReceivedBytes(buffer, bytesRead);
+                    /*
+                    向上层通知 设备断开链接
+                    */
+                    // handleReceivedBytes(buffer, bytesRead);
                     }
                 }
             }
         }
 
-        // Log functions
 
-        private void logD(String s) {
-            DebugTool.Log.dnfo(DEBUG_PREFIX + s);
-        }
 
-        private void Log.d("Gstreamer",String s) {
-            DebugTool.Log.dnfo(s);
-        }
+        // private void Log.d("Gstreamer",String s, Throwable tr) {
+        //     StringBuilder res = new StringBuilder(s);
+        //     if (tr != null) {
+        //         res.append(EXCEPTION_STRING);
+        //         res.append(tr.toString());
+        //     }
+        //     Log.d("Gstreamer",res.toString());
+        // }
 
-        private void Log.d("Gstreamer",String s) {
-            DebugTool.Log.darning(s);
-        }
 
-        private void Log.d("Gstreamer",String s, Throwable tr) {
-            StringBuilder res = new StringBuilder(s);
-            if (tr != null) {
-                res.append(EXCEPTION_STRING);
-                res.append(tr.toString());
-            }
-            Log.d("Gstreamer",res.toString());
-        }
-
-        private void Log.d("Gstreamer",String s, Throwable tr) {
-            DebugTool.Log.drror(s, tr);
-        }
     }
 
 	@Override
