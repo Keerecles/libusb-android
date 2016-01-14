@@ -8,7 +8,9 @@ import android.content.IntentFilter;
 import android.hardware.usb.UsbAccessory;
 import android.hardware.usb.UsbManager;
 import android.os.ParcelFileDescriptor;
+import android.util.Log;
 
+import com.usbtransfer.SdlException;
 
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
@@ -50,7 +52,7 @@ public class USBTransport {
      * Manufacturer name of the accessory we want to connect to. Must be the
      * same as in accessory_filter.xml to work properly.
      */
-    private final static String ACCESSORY_MANUFACTURER = "eKai";
+    private final static String ACCESSORY_MANUFACTURER = "EKAI";
     /**
      * Model name of the accessory we want to connect to. Must be the same as
      * in accessory_filter.xml to work properly.
@@ -83,15 +85,15 @@ public class USBTransport {
                     intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY);
             if (accessory != null) {
                 if (ACTION_USB_ACCESSORY_ATTACHED.equals(action)) {
-                    logI("Accessory " + accessory + " attached");
+                    Log.d("Gstreamer","Accessory " + accessory + " attached");
                     if (isAccessorySupported(accessory)) {
                         connectToAccessory(accessory);
                     } else {
-                        logW("Attached accessory is not supported!");
+                        Log.d("Gstreamer","Attached accessory is not supported!");
                     }
                 } else if (UsbManager.ACTION_USB_ACCESSORY_DETACHED
                         .equals(action)) {
-                    logI("Accessory " + accessory + " detached");
+                    Log.d("Gstreamer","Accessory " + accessory + " detached");
                     final String msg = "USB accessory has been detached";
                     disconnect(msg, new SdlException(msg,
                             SdlExceptionCause.SDL_USB_DETACHED));
@@ -99,25 +101,23 @@ public class USBTransport {
                     boolean permissionGranted = intent.getBooleanExtra(
                             UsbManager.EXTRA_PERMISSION_GRANTED, false);
                     if (permissionGranted) {
-                        logI("Permission granted for accessory " + accessory);
+                        Log.d("Gstreamer","Permission granted for accessory " + accessory);
                         openAccessory(accessory);
                     } else {
                         final String msg =
                                 "Permission denied for accessory " + accessory;
-                        logW(msg);
+                        Log.d("Gstreamer",msg);
                         disconnect(msg, new SdlException(msg,
                                 SdlExceptionCause.SDL_USB_PERMISSION_DENIED));
                     }
                 }
             } else {
-                logW("Accessory is null");
+                Log.d("Gstreamer","Accessory is null");
             }
         }
     };
-    /**
-     * USB config object.
-     */
-    private USBTransportConfig mConfig = null;
+    
+    
     /**
      * Current state of transport.
      *
@@ -156,10 +156,9 @@ public class USBTransport {
      * @param transportListener  Listener that gets notified on different
      *                           transport events
      */
-    public USBTransport(USBTransportConfig usbTransportConfig,
-                        ITransportListener transportListener) {
-        super(transportListener);
-        this.mConfig = usbTransportConfig;
+    public USBTransport() {
+//        super(transportListener);
+        
     	registerReciever();
     }
 
@@ -178,7 +177,7 @@ public class USBTransport {
      * @param state New state
      */
     private void setState(State state) {
-        logD("Changing state " + this.mState + " to " + state);
+        Log.d("Gstreamer","Changing state " + this.mState + " to " + state);
         this.mState = state;
     }
 
@@ -190,10 +189,9 @@ public class USBTransport {
      * @param length   Number of bytes to send
      * @return true if the bytes are sent successfully
      */
-    @Override
-    protected boolean sendBytesOverTransport(byte[] msgBytes, int offset,
+    public boolean sendBytesOverTransport(byte[] msgBytes, int offset,
                                              int length) {
-        logD("SendBytes: array size " + msgBytes.length + ", offset " + offset +
+        Log.d("Gstreamer","SendBytes: array size " + msgBytes.length + ", offset " + offset +
                 ", length " + length);
 
         boolean result = false;
@@ -205,26 +203,32 @@ public class USBTransport {
                             mOutputStream.write(msgBytes, offset, length);
                             result = true;
 
-                            logI("Bytes successfully sent");
-                            SdlTrace.logTransportEvent(TAG + ": bytes sent",
-                                    null, InterfaceActivityDirection.Transmit,
-                                    msgBytes, offset, length,
-                                    SDL_LIB_TRACE_KEY);
+                            Log.d("Gstreamer","Bytes successfully sent");
+//                            SdlTrace.logTransportEvent(TAG + ": bytes sent",
+//                                    null, InterfaceActivityDirection.Transmit,
+//                                    msgBytes, offset, length,
+//                                    SDL_LIB_TRACE_KEY);
                         } catch (IOException e) {
                             final String msg = "Failed to send bytes over USB";
-                            logW(msg, e);
-                            handleTransportError(msg, e);
+                            Log.d("Gstreamer",msg, e);
+                            /*
+                            向上层通知 设备断开链接
+                            */
+//                            handleTransportError(msg, e);
                         }
                     } else {
                         final String msg =
                                 "Can't send bytes when output stream is null";
-                        logW(msg);
-                        handleTransportError(msg, null);
+                        Log.d("Gstreamer",msg);
+                        /*
+                        向上层通知 设备断开链接
+                        */
+//                        handleTransportError(msg, null);
                     }
                 break;
 
             default:
-                logW("Can't send bytes from " + state + " state");
+                Log.d("Gstreamer","Can't send bytes from " + state + " state");
                 break;
         }
 
@@ -239,7 +243,7 @@ public class USBTransport {
         filter.addAction(UsbManager.ACTION_USB_ACCESSORY_DETACHED);
         filter.addAction(ACTION_USB_PERMISSION);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);        
-        getContext().registerReceiver(mUSBReceiver, filter);
+//        getContext().registerReceiver(mUSBReceiver, filter);
     }
     
     /**
@@ -247,13 +251,13 @@ public class USBTransport {
      *
      * @throws SdlException
      */
-    @Override
+    
     public void openConnection() throws SdlException {
         final State state = getState();
         switch (state) {
             case IDLE:
                 synchronized (this) {
-                    logI("openConnection()");
+                    Log.d("Gstreamer","openConnection()");
                     setState(State.LISTENING);
                 }
 
@@ -268,7 +272,7 @@ public class USBTransport {
                     initializeAccessory();
                 } catch (Exception e) {
                     String msg = "Couldn't start opening connection";
-                    logE(msg, e);
+                    Log.d("Gstreamer",msg, e);
                     throw new SdlException(msg, e,
                             SdlExceptionCause.SDL_CONNECTION_FAILED);
                 }
@@ -276,7 +280,7 @@ public class USBTransport {
                 break;
 
             default:
-                logW("openConnection() called from state " + state +
+                Log.d("Gstreamer","openConnection() called from state " + state +
                         "; doing nothing");
                 break;
         }
@@ -285,7 +289,7 @@ public class USBTransport {
     /**
      * Closes the USB connection if open.
      */
-    @Override
+  
     public void disconnect() {
         disconnect(null, null);
     }
@@ -294,9 +298,10 @@ public class USBTransport {
      * Asks the reader thread to stop while it's possible. If it's blocked on
      * read(), there is no way to stop it except for physical USB disconnect.
      */
-    //@Override
+    
     public void stopReading() {
-        DebugTool.logInfo("USBTransport: stop reading requested, doing nothing");
+    	Log.d("Gstreamer","USBTransport: stop reading requested, doing nothing");
+        //DebugTool.Log.dnfo("USBTransport: stop reading requested, doing nothing");
         // TODO - put back stopUSBReading(); @see <a href="https://adc.luxoft.com/jira/browse/SmartDeviceLink-3450">SmartDeviceLink-3450</a>
     }
 
@@ -305,14 +310,14 @@ public class USBTransport {
         final State state = getState();
         switch (state) {
             case CONNECTED:
-                logI("Stopping reading");
+                Log.d("Gstreamer","Stopping reading");
                 synchronized (this) {
                     stopReaderThread();
                 }
                 break;
 
             default:
-                logW("Stopping reading called from state " + state +
+                Log.d("Gstreamer","Stopping reading called from state " + state +
                         "; doing nothing");
                 break;
         }
@@ -323,7 +328,7 @@ public class USBTransport {
      */
     private void stopReaderThread() {
         if (mReaderThread != null) {
-            logI("Interrupting USB reader");
+            Log.d("Gstreamer","Interrupting USB reader");
             mReaderThread.interrupt();
             // don't join() now
             mReaderThread = null;
@@ -344,13 +349,13 @@ public class USBTransport {
             case LISTENING:
             case CONNECTED:
                 synchronized (this) {
-                    logI("Disconnect from state " + getState() + "; message: " +
+                    Log.d("Gstreamer","Disconnect from state " + getState() + "; message: " +
                             msg + "; exception: " + ex);
                     setState(State.IDLE);
 
-                    SdlTrace.logTransportEvent(TAG + ": disconnect", null,
-                            InterfaceActivityDirection.None, null, 0,
-                            SDL_LIB_TRACE_KEY);
+//                    SdlTrace.logTransportEvent(TAG + ": disconnect", null,
+//                            InterfaceActivityDirection.None, null, 0,
+//                            SDL_LIB_TRACE_KEY);
 
                     stopReaderThread();
 
@@ -359,7 +364,7 @@ public class USBTransport {
                             try {
                                 mOutputStream.close();
                             } catch (IOException e) {
-                                logW("Can't close output stream", e);
+                                Log.d("Gstreamer","Can't close output stream", e);
                                 mOutputStream = null;
                             }
                         }
@@ -367,7 +372,7 @@ public class USBTransport {
                             try {
                                 mInputStream.close();
                             } catch (IOException e) {
-                                logW("Can't close input stream", e);
+                                Log.d("Gstreamer","Can't close input stream", e);
                                 mInputStream = null;
                             }
                         }
@@ -375,7 +380,7 @@ public class USBTransport {
                             try {
                                 mParcelFD.close();
                             } catch (IOException e) {
-                                logW("Can't close file descriptor", e);
+                                Log.d("Gstreamer","Can't close file descriptor", e);
                                 mParcelFD = null;
                             }
                         }
@@ -388,7 +393,7 @@ public class USBTransport {
                 try {
                     getContext().unregisterReceiver(mUSBReceiver);
                 } catch (IllegalArgumentException e) {
-                    logW("Receiver was already unregistered", e);
+                    Log.d("Gstreamer","Receiver was already unregistered", e);
                 }
 
                 String disconnectMsg = (msg == null ? "" : msg);
@@ -399,39 +404,37 @@ public class USBTransport {
                 if (ex == null) {
                     // This disconnect was not caused by an error, notify the
                     // proxy that the transport has been disconnected.
-                    logI("Disconnect is correct. Handling it");
-                    handleTransportDisconnected(disconnectMsg);
+                    Log.d("Gstreamer","Disconnect is correct. Handling it");
+                    /*
+                    向上层通知 设备断开链接
+                    */
+                    
+//                    handleTransportDisconnected(disconnectMsg);
                 } else {
                     // This disconnect was caused by an error, notify the proxy
                     // that there was a transport error.
-                    logI("Disconnect is incorrect. Handling it as error");
-                    handleTransportError(disconnectMsg, ex);
+                    Log.d("Gstreamer","Disconnect is incorrect. Handling it as error");
+                    /*
+                    向上层通知 设备断开链接
+                    */
+//                  handleTransportError(disconnectMsg, ex);
                 }
                 break;
 
             default:
-                logW("Disconnect called from state " + state +
+                Log.d("Gstreamer","Disconnect called from state " + state +
                         "; doing nothing");
                 break;
         }
     }
 
-    /**
-     * Returns the type of the transport.
-     *
-     * @return TransportType.USB
-     * @see com.gst_sdk_tutorials.transport.enums.TransportType
-     */
-    @Override
-    public TransportType getTransportType() {
-        return TransportType.USB;
-    }
-
+ 
+ 
     /**
      * Looks for an already connected compatible accessory and connect to it.
      */
     private void initializeAccessory() {
-        logI("Looking for connected accessories");
+        Log.d("Gstreamer","Looking for connected accessories");
         UsbManager usbManager = getUsbManager();
         UsbAccessory[] accessories = usbManager.getAccessoryList();
         if (accessories != null) {
@@ -443,7 +446,7 @@ public class USBTransport {
                 }
             }
         } else {
-            logI("No connected accessories found");
+            Log.d("Gstreamer","No connected accessories found");
         }
     }
 
@@ -476,10 +479,10 @@ public class USBTransport {
             case LISTENING:
                 UsbManager usbManager = getUsbManager();
                 if (usbManager.hasPermission(accessory)) {
-                    logI("Already have permission to use " + accessory);
+                    Log.d("Gstreamer","Already have permission to use " + accessory);
                     openAccessory(accessory);
                 } else {
-                    logI("Requesting permission to use " + accessory);
+                    Log.d("Gstreamer","Requesting permission to use " + accessory);
 
                     PendingIntent permissionIntent = PendingIntent
                             .getBroadcast(getContext(), 0,
@@ -490,7 +493,7 @@ public class USBTransport {
                 break;
 
             default:
-                logW("connectToAccessory() called from state " + state +
+                Log.d("Gstreamer","connectToAccessory() called from state " + state +
                         "; doing nothing");
         }
     }
@@ -517,7 +520,7 @@ public class USBTransport {
         switch (state) {
             case LISTENING:
                 synchronized (this) {
-                    logI("Opening accessory " + accessory);
+                    Log.d("Gstreamer","Opening accessory " + accessory);
                     mAccessory = accessory;
 
                     mReaderThread = new Thread(new USBTransportReader());
@@ -526,38 +529,21 @@ public class USBTransport {
                             .setName(USBTransportReader.class.getSimpleName());
                     mReaderThread.start();
 
-                    // Initialize the SiphonServer
-                    if (SiphonServer.getSiphonEnabledStatus()) {
-                    	SiphonServer.init();
-                    }
+//                    // Initialize the SiphonServer
+//                    if (SiphonServer.getSiphonEnabledStatus()) {
+//                    	SiphonServer.init();
+//                    }
                 }
 
                 break;
 
             default:
-                logW("openAccessory() called from state " + state +
+                Log.d("Gstreamer","openAccessory() called from state " + state +
                         "; doing nothing");
         }
     }
 
-    /**
-     * Logs the string and the throwable with ERROR level.
-     *
-     * @param s  string to log
-     * @param tr throwable to log
-     */
-    private void logE(String s, Throwable tr) {
-        DebugTool.logError(s, tr);
-    }
-
-    /**
-     * Logs the string with WARN level.
-     *
-     * @param s string to log
-     */
-    private void logW(String s) {
-        DebugTool.logWarning(s);
-    }
+ 
 
     /**
      * Logs the string and the throwable with WARN level.
@@ -565,42 +551,15 @@ public class USBTransport {
      * @param s  string to log
      * @param tr throwable to log
      */
-    private void logW(String s, Throwable tr) {
-        StringBuilder res = new StringBuilder(s);
-        if (tr != null) {
-            res.append(EXCEPTION_STRING);
-            res.append(tr.toString());
-        }
-        logW(res.toString());
-    }
+//    private void Log.d("Gstreamer",String s, Throwable tr) {
+//        StringBuilder res = new StringBuilder(s);
+//        if (tr != null) {
+//            res.append(EXCEPTION_STRING);
+//            res.append(tr.toString());
+//        }
+//        Log.d("Gstreamer",res.toString());
+//    }
 
-    /**
-     * Logs the string with INFO level.
-     *
-     * @param s string to log
-     */
-    private void logI(String s) {
-        DebugTool.logInfo(s);
-    }
-
-    /**
-     * Logs the string with DEBUG level.
-     *
-     * @param s string to log
-     */
-    private void logD(String s) {
-        // DebugTool doesn't support DEBUG level, so we use INFO instead
-        DebugTool.logInfo(DEBUG_PREFIX + s);
-    }
-
-    /**
-     * Returns Context to communicate with the OS.
-     *
-     * @return current context to be used by the USB transport
-     */
-    private Context getContext() {
-        return mConfig.getUSBContext();
-    }
 
     /**
      * Possible states of the USB transport.
@@ -669,7 +628,7 @@ public class USBTransport {
          */
         private boolean connect() {
             if (isInterrupted()) {
-                logI("Thread is interrupted, not connecting");
+                Log.d("Gstreamer","Thread is interrupted, not connecting");
                 return false;
             }
 
@@ -684,15 +643,15 @@ public class USBTransport {
                         } catch (Exception e) {
                             final String msg =
                                     "Have no permission to open the accessory";
-                            logE(msg, e);
+                            Log.d("Gstreamer",msg, e);
                             disconnect(msg, e);
                             return false;
                         }
                         if (mParcelFD == null) {
                             if (isInterrupted()) {
-                                logW("Can't open accessory, and thread is interrupted");
+                                Log.d("Gstreamer","Can't open accessory, and thread is interrupted");
                             } else {
-                                logW("Can't open accessory, disconnecting!");
+                                Log.d("Gstreamer","Can't open accessory, disconnecting!");
                                 String msg = "Failed to open USB accessory";
                                 disconnect(msg, new SdlException(msg,
                                         SdlExceptionCause.SDL_CONNECTION_FAILED));
@@ -704,7 +663,7 @@ public class USBTransport {
                         mOutputStream = new FileOutputStream(fd);
                     }
 
-                    logI("Accessory opened!");
+                    Log.d("Gstreamer","Accessory opened!");
 
                     synchronized (USBTransport.this) {
                         setState(State.CONNECTED);
@@ -713,7 +672,7 @@ public class USBTransport {
                     break;
 
                 default:
-                    logW("connect() called from state " + state +
+                    Log.d("Gstreamer","connect() called from state " + state +
                             ", will not try to connect");
                     return false;
             }
@@ -736,18 +695,18 @@ public class USBTransport {
                     bytesRead = mInputStream.read(buffer);
                     if (bytesRead == -1) {
                         if (isInterrupted()) {
-                            logI("EOF reached, and thread is interrupted");
+                            Log.d("Gstreamer","EOF reached, and thread is interrupted");
                         } else {
-                            logI("EOF reached, disconnecting!");
+                            Log.d("Gstreamer","EOF reached, disconnecting!");
                             disconnect("EOF reached", null);
                         }
                         return;
                     }
                 } catch (IOException e) {
                     if (isInterrupted()) {
-                        logW("Can't read data, and thread is interrupted", e);
+                        Log.d("Gstreamer","Can't read data, and thread is interrupted", e);
                     } else {
-                        logW("Can't read data, disconnecting!", e);
+                        Log.d("Gstreamer","Can't read data, disconnecting!", e);
                         disconnect("Can't read data from USB", e);
                     }
                     return;
@@ -759,7 +718,7 @@ public class USBTransport {
                         SDL_LIB_TRACE_KEY);
 
                 if (isInterrupted()) {
-                    logI("Read some data, but thread is interrupted");
+                    Log.d("Gstreamer","Read some data, but thread is interrupted");
                     return;
                 }
 
@@ -774,28 +733,28 @@ public class USBTransport {
         // Log functions
 
         private void logD(String s) {
-            DebugTool.logInfo(DEBUG_PREFIX + s);
+            DebugTool.Log.dnfo(DEBUG_PREFIX + s);
         }
 
-        private void logI(String s) {
-            DebugTool.logInfo(s);
+        private void Log.d("Gstreamer",String s) {
+            DebugTool.Log.dnfo(s);
         }
 
-        private void logW(String s) {
-            DebugTool.logWarning(s);
+        private void Log.d("Gstreamer",String s) {
+            DebugTool.Log.darning(s);
         }
 
-        private void logW(String s, Throwable tr) {
+        private void Log.d("Gstreamer",String s, Throwable tr) {
             StringBuilder res = new StringBuilder(s);
             if (tr != null) {
                 res.append(EXCEPTION_STRING);
                 res.append(tr.toString());
             }
-            logW(res.toString());
+            Log.d("Gstreamer",res.toString());
         }
 
-        private void logE(String s, Throwable tr) {
-            DebugTool.logError(s, tr);
+        private void Log.d("Gstreamer",String s, Throwable tr) {
+            DebugTool.Log.drror(s, tr);
         }
     }
 
