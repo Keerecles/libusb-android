@@ -21,6 +21,8 @@ GSTREAMER_PLUGINS         := $(GSTREAMER_PLUGINS_CORE) $(GSTREAMER_PLUGINS_SYS) 
 GSTREAMER_EXTRA_DEPS      := gstreamer-interfaces-0.10 gstreamer-video-0.10
 include $(GSTREAMER_NDK_BUILD_PATH)/gstreamer.mk
 
-include $(LOCAL_PATH)/libusb/android/jni/libusb.mk
-LOCAL_C_INCLUDES += $(LIBUSB_ROOT_ABS)
-LOCAL_SHARED_LIBRARIES += libusb1.0
+
+
+
+
+

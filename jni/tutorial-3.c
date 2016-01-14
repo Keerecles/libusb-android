@@ -9,7 +9,7 @@
 #include <gst/app/gstappsrc.h>
 #include <pthread.h>
 #include <gst/app/gstappsrc.h>
-#include "libusb.h"
+
 
 
 GST_DEBUG_CATEGORY_STATIC (debug_category);
