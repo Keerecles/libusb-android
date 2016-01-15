@@ -534,11 +534,6 @@ public class USBTransport {
                     mReaderThread
                             .setName(USBTransportReader.class.getSimpleName());
                     mReaderThread.start();
-
-//                    // Initialize the SiphonServer
-//                    if (SiphonServer.getSiphonEnabledStatus()) {
-//                    	SiphonServer.init();
-//                    }
                 }
 
                 break;
@@ -548,27 +543,6 @@ public class USBTransport {
                         "; doing nothing");
         }
     }
-
- 
-
-    /**
-     * Logs the string and the throwable with WARN level.
-     *
-     * @param s  string to log
-     * @param tr throwable to log
-     */
-//    private void Log.d("Gstreamer",String s, Throwable tr) {
-//        StringBuilder res = new StringBuilder(s);
-//        if (tr != null) {
-//            res.append(EXCEPTION_STRING);
-//            res.append(tr.toString());
-//        }
-//        Log.d("Gstreamer",res.toString());
-//    }
-
-
-
-
 
 
     /**

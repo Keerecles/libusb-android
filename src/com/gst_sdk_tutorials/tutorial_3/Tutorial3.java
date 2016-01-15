@@ -25,6 +25,19 @@ public class Tutorial3 extends Activity implements SurfaceHolder.Callback {
 
     private boolean is_playing_desired;   // Whether the user asked to go to PLAYING
 
+    private static final String ACTION_USB_PERMISSION = "com.gst_sdk_tutorials.tutorial_3.USB_PERMISSION";
+
+    UsbAccessory mAccessory;
+    ParcelFileDescriptor mFileDescriptor;
+    FileInputStream mInputStream;
+    FileOutputStream mOutputStream;
+    
+
+    // 1) find accessory
+    UsbAccessory mAccessory = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY);
+
+
+
     // Called when the activity is first created.
     @Override
     public void onCreate(Bundle savedInstanceState)
@@ -41,6 +54,21 @@ public class Tutorial3 extends Activity implements SurfaceHolder.Callback {
         }
 
         setContentView(R.layout.main);
+
+        //****************register usblistener********************//
+        UsbManager mUsbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
+
+
+        PendingIntent mPermissionIntent = PendingIntent.getBroadcast(this, 0, new Intent(ACTION_USB_PERMISSION), 0);
+        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        registerReceiver(mUsbReceiver, filter);
+
+
+        mUsbManager.requestPermission(mAccessory, mPermissionIntent);
+
+
+        //******************************************************//
+
 
         ImageButton play = (ImageButton) this.findViewById(R.id.button_play);
         play.setOnClickListener(new OnClickListener() {
@@ -76,6 +104,85 @@ public class Tutorial3 extends Activity implements SurfaceHolder.Callback {
 
         nativeInit();
     }
+
+
+    //*****************************usb***************************************//
+    
+
+    
+
+    // 2) list the accessory
+    UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
+    UsbAccessory[] accessoryList = manager.getAcccessoryList();
+
+    // 3) requestPermission
+
+    private final BroadcastReceiver mUsbReceiver = new BroadcastReceiver() {
+
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (ACTION_USB_PERMISSION.equals(action)) {
+                synchronized (this) {
+                    UsbDevice device = (UsbDevice)intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+    
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        if(device != null){
+                          //call method to set up device communication
+                       }
+                    } 
+                    else {
+                        Log.d(TAG, "permission denied for device " + device);
+                    }
+                }
+            }
+        }
+    };
+
+    // 4) connect to the accessory
+    private void openAccessory() {
+    Log.d("Gstreamer", "openAccessory: " + mAccessory);
+    mFileDescriptor = mUsbManager.openAccessory(mAccessory);
+    if (mFileDescriptor != null) {
+        FileDescriptor fd = mFileDescriptor.getFileDescriptor();
+        mInputStream = new FileInputStream(fd);
+        mOutputStream = new FileOutputStream(fd);
+        Thread thread = new Thread(null, this, "AccessoryThread");
+        thread.start();
+    }
+}
+
+
+
+     // 5) End the connect
+    // BroadcastReceiver mUsbReceiver = new BroadcastReceiver() {
+    //     public void onReceive(Context context, Intent intent) {
+    //         String action = intent.getAction(); 
+
+    //         if (UsbManager.ACTION_USB_ACCESSORY_DETACHED.equals(action)) {
+    //             UsbAccessory accessory = (UsbAccessory)intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY);
+    //             if (accessory != null) {
+    //                 // call your method that cleans up and closes communication with the accessory
+    //             }
+    //         }
+    //     }
+    // };
+
+
+
+    //**************************************************************************//
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     protected void onSaveInstanceState (Bundle outState) {
         Log.d ("GStreamer", "Saving state, playing:" + is_playing_desired);
