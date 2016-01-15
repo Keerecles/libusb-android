@@ -11,6 +11,28 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
+
+//******************usb import ******************//
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbAccessory;
+import android.hardware.usb.UsbManager;
+import android.os.ParcelFileDescriptor;
+
+import java.io.FileDescriptor;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+
+//**********************************************//
+
+
+
 import com.gstreamer.GStreamer;
 
 public class Tutorial3 extends Activity implements SurfaceHolder.Callback {
@@ -27,16 +49,25 @@ public class Tutorial3 extends Activity implements SurfaceHolder.Callback {
 
     private static final String ACTION_USB_PERMISSION = "com.gst_sdk_tutorials.tutorial_3.USB_PERMISSION";
 
+    private Thread mReaderThread = null;
+   
+
+    
+
+    UsbManager mUsbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
     UsbAccessory mAccessory;
     ParcelFileDescriptor mFileDescriptor;
     FileInputStream mInputStream;
-    FileOutputStream mOutputStream;
+    FileOutputStream mOutputStream; 
+ // 1) find accessory
+    mAccessory = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY);
     
 
-    // 1) find accessory
-    UsbAccessory mAccessory = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY);
-
-
+    
+    
+    
+    
+    
 
     // Called when the activity is first created.
     @Override
@@ -56,7 +87,7 @@ public class Tutorial3 extends Activity implements SurfaceHolder.Callback {
         setContentView(R.layout.main);
 
         //****************register usblistener********************//
-        UsbManager mUsbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        
 
 
         PendingIntent mPermissionIntent = PendingIntent.getBroadcast(this, 0, new Intent(ACTION_USB_PERMISSION), 0);
@@ -107,13 +138,10 @@ public class Tutorial3 extends Activity implements SurfaceHolder.Callback {
 
 
     //*****************************usb***************************************//
-    
-
-    
 
     // 2) list the accessory
-    UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
-    UsbAccessory[] accessoryList = manager.getAcccessoryList();
+    
+
 
     // 3) requestPermission
 
@@ -139,21 +167,25 @@ public class Tutorial3 extends Activity implements SurfaceHolder.Callback {
     };
 
     // 4) connect to the accessory
+    
+   
     private void openAccessory() {
-    Log.d("Gstreamer", "openAccessory: " + mAccessory);
-    mFileDescriptor = mUsbManager.openAccessory(mAccessory);
-    if (mFileDescriptor != null) {
-        FileDescriptor fd = mFileDescriptor.getFileDescriptor();
-        mInputStream = new FileInputStream(fd);
-        mOutputStream = new FileOutputStream(fd);
-        Thread thread = new Thread(null, this, "AccessoryThread");
-        thread.start();
+        Log.d("Gstreamer", "openAccessory: " + mAccessory);
+        mFileDescriptor = mUsbManager.openAccessory(mAccessory);
+        if (mFileDescriptor != null) {
+            FileDescriptor fd = mFileDescriptor.getFileDescriptor();
+            mInputStream = new FileInputStream(fd);
+            mOutputStream = new FileOutputStream(fd);
+            mReaderThread = new Thread(new USBTransportReader());
+            mReaderThread.start();
+        }
     }
-}
 
 
 
      // 5) End the connect
+    
+    
     // BroadcastReceiver mUsbReceiver = new BroadcastReceiver() {
     //     public void onReceive(Context context, Intent intent) {
     //         String action = intent.getAction(); 
@@ -246,5 +278,77 @@ public class Tutorial3 extends Activity implements SurfaceHolder.Callback {
         Log.d("GStreamer", "Surface destroyed");
         nativeSurfaceFinalize ();
     }
+
+
+
+
+     private class USBTransportReader implements Runnable {
+        
+    	 
+        private boolean isInterrupted() {
+            return Thread.interrupted();
+        }
+
+        /**
+         * Entry function that is called when the task is started. It attempts
+         * to connect to the accessory, then starts a read loop until
+         * interrupted.
+         */
+        @Override
+        public void run() {
+            Log.d("Gstreamer","USB reader started!");  
+                readFromTransport();
+            Log.d("Gstreamer","USB reader finished!");
+        }
+
+       
+
+        /**
+         * Continuously reads data from the transport's input stream, blocking
+         * when no data is available.
+         */
+        private void readFromTransport() {
+            final int READ_BUFFER_SIZE = 4096;
+            byte[] buffer = new byte[READ_BUFFER_SIZE];
+            int bytesRead;
+
+            // read loop
+            while (!isInterrupted()) {
+                try {
+                    bytesRead = mInputStream.read(buffer);
+                    if (bytesRead == -1) {
+                        if (isInterrupted()) {
+                            Log.d("Gstreamer","EOF reached, and thread is interrupted");
+                        } else {
+                            Log.d("Gstreamer","EOF reached, disconnecting!");
+                            //disconnect("EOF reached", null);
+                        }
+                        return;
+                    }
+                } catch (IOException e) {
+                    if (isInterrupted()) {
+                        Log.d("Gstreamer","Can't read data, and thread is interrupted", e);
+                    } else {
+                        Log.d("Gstreamer","Can't read data, disconnecting!", e);
+                        //disconnect("Can't read data from USB", e);
+                    }
+                    return;
+                }
+
+                Log.d("Gstreamer","Read " + bytesRead + " bytes");
+
+               
+
+                if (bytesRead > 0) {
+                    synchronized (this) {
+                    /*
+                    向上层通知 设备断开链接
+                    */
+                    // handleReceivedBytes(buffer, bytesRead);
+                    }
+                }
+            }
+        }
+	}
 
 }
