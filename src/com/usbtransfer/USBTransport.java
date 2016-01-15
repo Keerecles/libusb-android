@@ -29,6 +29,12 @@ import java.io.OutputStream;
  * some data is sent again or the USB is physically disconnected.
  */
 public class USBTransport {
+   
+
+
+    
+    public Context mContext;
+
     /**
      * Broadcast action: sent when a USB accessory is attached.
      *
@@ -243,7 +249,7 @@ public class USBTransport {
         filter.addAction(UsbManager.ACTION_USB_ACCESSORY_DETACHED);
         filter.addAction(ACTION_USB_PERMISSION);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);        
-//        getContext().registerReceiver(mUSBReceiver, filter);
+        getContext().registerReceiver(mUSBReceiver, filter);
     }
     
     /**
@@ -561,6 +567,19 @@ public class USBTransport {
 //    }
 
 
+
+
+
+
+    /**
+     * Returns Context to communicate with the OS.
+     *
+     * @return current context to be used by the USB transport
+     */
+    private Context getContext() {
+        return mContext;
+    }
+
     /**
      * Possible states of the USB transport.
      */
@@ -752,9 +771,9 @@ public class USBTransport {
 
     }
 
-	@Override
+	
 	public String getBroadcastComment() {
-		// TODO Auto-generated method stub
+		
 		return null;
 	}
 }
